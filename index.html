@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Air Hockey Lobby</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script> <!-- Load Phaser -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <script src="lobby.js" defer></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: rgb(145, 143, 143);
+        }
+    
+        #game-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
+        }
+    
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Multiplayer Air Hockey</h1>
+    <div id="lobby">
+        <input type="text" id="playerName" placeholder="Enter your name">
+        <button id="createRoom">Create Room</button>
+        <input type="text" id="roomCode" placeholder="Enter Room Code">
+        <button id="joinRoom">Join Room</button>
+    </div>
+    <div id="gameInfo" style="display: none;">
+        <p id="roomStatus"></p>
+        <button id="readyButton">Ready</button>
+    </div>
+    <div id="game-container">
+    </div>
+
+</body>
+</html>
