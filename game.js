@@ -6,6 +6,8 @@ class Example extends Phaser.Scene {
     this.player2Score = 0;
     this.playerNumber = null;
     this.isPlayerReady = true; // Set to true for local testing
+    this.lastPuckUpdate = 0;
+    this.updateInterval = 50; // Update every 50ms
     // Create beep sounds using Web Audio API
     const audioContext = new (window.AudioContext ||
       window.webkitAudioContext)();
@@ -15,6 +17,7 @@ class Example extends Phaser.Scene {
       audioContext.sampleRate * 0.1,
       audioContext.sampleRate
     );
+
     const baseData = baseBuffer.getChannelData(0);
     for (let i = 0; i < baseBuffer.length; i++) {
       baseData[i] =
@@ -100,9 +103,28 @@ class Example extends Phaser.Scene {
       });
 
       this.socket.on("puckSync", (data) => {
-        // if (!this.isPlayerReady) return;
-        this.puck.setPosition(data.x, data.y);
-        this.puck.setVelocity(data.velocityX, data.velocityY);
+        if (!this.isPlayerReady) return;
+        
+        // Calculate time difference
+        const now = Date.now();
+        const latency = now - data.timestamp;
+        
+        // Predict position based on velocity and latency
+        const predictedX = data.x + data.velocityX * (latency / 1000);
+        const predictedY = data.y + data.velocityY * (latency / 1000);
+        
+        // Smoothly interpolate to the predicted position
+        this.tweens.add({
+          targets: this.puck,
+          x: predictedX,
+          y: predictedY,
+          duration: 50, // Match your network latency
+          ease: 'Linear',
+          onUpdate: () => {
+            // Maintain velocity during interpolation
+            this.puck.setVelocity(data.velocityX, data.velocityY);
+          }
+        });
       });
 
       this.socket.on("scoreSync", (scores) => {
@@ -809,10 +831,9 @@ class Example extends Phaser.Scene {
             y: this.puck.y,
             velocityX: this.puck.body.velocity.x,
             velocityY: this.puck.body.velocity.y,
+            timestamp: Date.now() // Add timestamp
           });
         }
-
-
       }
     });
     this.physics.add.collider(
@@ -858,6 +879,9 @@ class Example extends Phaser.Scene {
       callback: () => {},
     });
   }
+
+
+
   update() {
     this.paddle1.setVelocityY(0);
     this.paddle2.setVelocityY(0);
@@ -875,14 +899,15 @@ class Example extends Phaser.Scene {
     // Show left cancer text when oncogene is ON
     this.cancerTextLeft.setAlpha(this.leftSwitchOn ? 1 : 0);
     // Sync puck state
-    if (this.socket && this.isPlayerReady) {
-
+    if (this.socket && this.isPlayerReady && Date.now() - this.lastPuckUpdate > this.updateInterval) {
       this.socket.emit("puckUpdate", {
         x: this.puck.x,
         y: this.puck.y,
         velocityX: this.puck.body.velocity.x,
         velocityY: this.puck.body.velocity.y,
+        timestamp: Date.now()
       });
+      this.lastPuckUpdate = Date.now();
     }
   }
   handlePaddleCollision(puck, paddle) {
