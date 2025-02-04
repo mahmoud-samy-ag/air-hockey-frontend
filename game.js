@@ -874,12 +874,7 @@ class Example extends Phaser.Scene {
     this.cancerTextLeft.setAlpha(this.leftSwitchOn ? 1 : 0);
     // Sync puck state
     if (this.socket && this.isPlayerReady) {
-      console.log('Sending puck update:', {
-        x: this.puck.x,
-        y: this.puck.y,
-        velocityX: this.puck.body.velocity.x,
-        velocityY: this.puck.body.velocity.y
-      });
+
       this.socket.emit("puckUpdate", {
         x: this.puck.x,
         y: this.puck.y,
