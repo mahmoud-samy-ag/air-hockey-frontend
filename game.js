@@ -100,7 +100,7 @@ class Example extends Phaser.Scene {
       });
 
       this.socket.on("puckSync", (data) => {
-        if (!this.isPlayerReady) return;
+        // if (!this.isPlayerReady) return;
         this.puck.setPosition(data.x, data.y);
         this.puck.setVelocity(data.velocityX, data.velocityY);
       });
@@ -811,6 +811,8 @@ class Example extends Phaser.Scene {
             velocityY: this.puck.body.velocity.y,
           });
         }
+
+
       }
     });
     this.physics.add.collider(
