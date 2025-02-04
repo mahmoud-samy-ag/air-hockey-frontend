@@ -75,7 +75,7 @@ class Example extends Phaser.Scene {
             x: this.puck.x,
             y: this.puck.y,
             velocityX: this.puck.body.velocity.x,
-            velocityY: this.puck.body.velocity.y,
+            velocityY: this.puck.body.velocity.y, // Add velocity to initial state
           },
           scores: {
             player1: this.player1Score,
@@ -87,6 +87,12 @@ class Example extends Phaser.Scene {
       this.socket.on("receiveInitialState", (state) => {
         this.puck.setPosition(state.puck.x, state.puck.y);
         this.puck.setVelocity(state.puck.velocityX, state.puck.velocityY);
+
+        if (this.puck.body) {
+          this.puck.body.reset(state.puck.x, state.puck.y);
+          this.puck.body.setVelocity(state.puck.velocityX, state.puck.velocityY);
+        }
+
         this.player1Score = state.scores.player1;
         this.player2Score = state.scores.player2;
         this.player1ScoreText.setText(this.player1Score.toString());
@@ -795,6 +801,16 @@ class Example extends Phaser.Scene {
           startSpeed * Math.cos((startAngle * Math.PI) / 180),
           startSpeed * Math.sin((startAngle * Math.PI) / 180)
         );
+    
+        // Immediately sync the puck state
+        if (this.socket) {
+          this.socket.emit("puckUpdate", {
+            x: this.puck.x,
+            y: this.puck.y,
+            velocityX: this.puck.body.velocity.x,
+            velocityY: this.puck.body.velocity.y,
+          });
+        }
       }
     });
     this.physics.add.collider(
@@ -858,6 +874,12 @@ class Example extends Phaser.Scene {
     this.cancerTextLeft.setAlpha(this.leftSwitchOn ? 1 : 0);
     // Sync puck state
     if (this.socket && this.isPlayerReady) {
+      console.log('Sending puck update:', {
+        x: this.puck.x,
+        y: this.puck.y,
+        velocityX: this.puck.body.velocity.x,
+        velocityY: this.puck.body.velocity.y
+      });
       this.socket.emit("puckUpdate", {
         x: this.puck.x,
         y: this.puck.y,
