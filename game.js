@@ -56,7 +56,17 @@ class Example extends Phaser.Scene {
       .setVisible(false);
 
     if (typeof io !== "undefined") {
-      this.socket = io("https://air-hockey-backend.onrender.com/");
+      this.socket = io("127.0.0.1:3000/");
+
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomId = urlParams.get('room_id') || `room_${Date.now()}`;
+      const playerNumber = urlParams.get('player_number') || 1;
+
+      this.socket.emit("createRoom", {
+          room_id: roomId,
+          player_number: playerNumber
+      });
 
       // In preload function:
       this.socket.on("provideInitialState", () => {
@@ -92,22 +102,17 @@ class Example extends Phaser.Scene {
       this.socket.on("scoreSync", (scores) => {
         this.player1Score = scores.player1;
         this.player2Score = scores.player2;
-        
-        if (this.player1ScoreText) {
-            this.player1ScoreText.setText(this.player1Score.toString());
-        }
-    
-        if (this.player2ScoreText) {
-            this.player2ScoreText.setText(this.player2Score.toString());
-        }
-    });
 
-      if (this.socket) {
-        this.socket.emit("scoreUpdate", {
-          player1: this.player1Score,
-          player2: this.player2Score,
-        });
-      }
+        if (this.player1ScoreText) {
+          this.player1ScoreText.setText(this.player1Score.toString());
+        }
+
+        if (this.player2ScoreText) {
+          this.player2ScoreText.setText(this.player2Score.toString());
+        }
+      });
+
+      
 
       this.socket.on("playerNumber", (num) => {
         this.playerNumber = num;
@@ -447,12 +452,12 @@ class Example extends Phaser.Scene {
     // Add score text
     this.player1ScoreText = this.add.text(340, 15, "0", {
       fontSize: "32px",
-      fill: "#00ffff"
-  });
-  this.player2ScoreText = this.add.text(460, 15, "0", {
-    fontSize: "32px",
-    fill: "#ff3366"
-});
+      fill: "#00ffff",
+    });
+    this.player2ScoreText = this.add.text(460, 15, "0", {
+      fontSize: "32px",
+      fill: "#ff3366",
+    });
     const createTexture = (name, color, size, radius) => {
       const graphics = this.add.graphics();
       // Enhanced shadow effect for puck
@@ -654,10 +659,12 @@ class Example extends Phaser.Scene {
           // Update score and switch goal appearance
           if (left) {
             // Play sound when hitting the base
-            const source = this.audioContext.createBufferSource();
-            source.buffer = this.baseHitSound;
-            source.connect(this.audioContext.destination);
-            source.start();
+            if(this.audioContext){
+              const source = this.audioContext.createBufferSource();
+              source.buffer = this.paddleHitSound;
+              source.connect(this.audioContext.destination);
+              source.start();
+            }
 
             this.player2Score++;
             this.player2ScoreText.setText(this.player2Score.toString());
@@ -697,10 +704,12 @@ class Example extends Phaser.Scene {
             });
           } else if (right) {
             // Play sound when hitting the base
-            const source = this.audioContext.createBufferSource();
-            source.buffer = this.baseHitSound;
-            source.connect(this.audioContext.destination);
-            source.start();
+            if(this.audioContext){
+              const source = this.audioContext.createBufferSource();
+              source.buffer = this.paddleHitSound;
+              source.connect(this.audioContext.destination);
+              source.start();
+            }
 
             this.player1Score++;
             this.player1ScoreText.setText(this.player1Score.toString());
@@ -755,12 +764,23 @@ class Example extends Phaser.Scene {
               flash.destroy();
             },
           });
+
+          if (this.socket) {
+            this.socket.emit("scoreUpdate", {
+              player1: this.player1Score,
+              player2: this.player2Score,
+            });
+          }
+
+
         }
 
         // Reset puck to center with no velocity
         this.puck.setPosition(400, 300);
         this.puck.setVelocity(0, 0);
       }
+
+      
     });
 
     // Make puck interactive
@@ -786,7 +806,6 @@ class Example extends Phaser.Scene {
     );
     // Enable mouse input
     this.input.on("pointermove", (pointer) => {
-      console.log(this.playerNumber)
       if (!this.isPlayerReady) return;
 
       let x, y;
@@ -800,6 +819,7 @@ class Example extends Phaser.Scene {
         y = Phaser.Math.Linear(this.paddle1.y, targetY, lerpFactor);
         this.paddle1.setPosition(x, y);
       }
+
       // Player 2 (Right Side)
       else if (this.playerNumber === 2) {
         const targetX = Phaser.Math.Clamp(pointer.x, 475, 725);
@@ -812,6 +832,7 @@ class Example extends Phaser.Scene {
       if (this.socket) {
         this.socket.emit("playerMove", { x, y });
       }
+      
     });
     this.time.addEvent({
       delay: 3000,
@@ -848,10 +869,13 @@ class Example extends Phaser.Scene {
   handlePaddleCollision(puck, paddle) {
     // Play sound effect
     if (puck.active && paddle.active) {
-      const source = this.audioContext.createBufferSource();
-      source.buffer = this.paddleHitSound;
-      source.connect(this.audioContext.destination);
-      source.start();
+      
+      if(this.audioContext){
+        const source = this.audioContext.createBufferSource();
+        source.buffer = this.paddleHitSound;
+        source.connect(this.audioContext.destination);
+        source.start();
+      }
     }
     // Get vectors for collision calculation
     const dx = puck.x - paddle.x;
@@ -916,38 +940,28 @@ class Example extends Phaser.Scene {
 const container = document.getElementById("renderDiv");
 const config = {
   type: Phaser.AUTO,
-  parent: 'renderDiv',
+  parent: "renderDiv",
   scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
-      antialias: true
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    antialias: true,
   },
   willReadFrequently: true,
   width: 800,
   height: 600,
   physics: {
-      default: 'arcade',
-      arcade: {
-          gravity: { y: 0 },
-          debug: false
-      }
+    default: "arcade",
+    arcade: {
+      gravity: { y: 0 },
+      debug: false,
+    },
   },
   render: {
-      pixelArt: false,
-      antialiasGL: true,
-      canvas: document.createElement("canvas"),
+    pixelArt: false,
+    antialiasGL: true,
+    canvas: document.createElement("canvas"),
   },
-  scene: Example
+  scene: Example,
 };
 
 window.phaserGame = new Phaser.Game(config);
-
-
-
-
-
-
-
-
-
-
