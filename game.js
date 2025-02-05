@@ -1,4 +1,3 @@
-
 class Example extends Phaser.Scene {
   constructor() {
     super();
@@ -59,14 +58,13 @@ class Example extends Phaser.Scene {
     if (typeof io !== "undefined") {
       this.socket = io("https://air-hockey-backend.onrender.com/");
 
-
       const urlParams = new URLSearchParams(window.location.search);
-      const roomId = urlParams.get('room_id') || `room_${Date.now()}`;
-      const playerNumber = urlParams.get('player_number') || 1;
+      const roomId = urlParams.get("room_id") || `room_${Date.now()}`;
+      const playerNumber = urlParams.get("player_number") || 1;
 
       this.socket.emit("createRoom", {
-          room_id: roomId,
-          player_number: playerNumber
+        room_id: roomId,
+        player_number: playerNumber,
       });
 
       // In preload function:
@@ -91,7 +89,10 @@ class Example extends Phaser.Scene {
 
         if (this.puck.body) {
           this.puck.body.reset(state.puck.x, state.puck.y);
-          this.puck.body.setVelocity(state.puck.velocityX, state.puck.velocityY);
+          this.puck.body.setVelocity(
+            state.puck.velocityX,
+            state.puck.velocityY
+          );
         }
 
         this.player1Score = state.scores.player1;
@@ -102,8 +103,26 @@ class Example extends Phaser.Scene {
 
       this.socket.on("puckSync", (data) => {
         if (!this.isPlayerReady) return;
-        this.puck.setPosition(data.x, data.y);
-        this.puck.setVelocity(data.velocityX, data.velocityY);
+
+        // Estimate the time delay between receiving the update
+        const currentTime = performance.now();
+        const timeDelta = (currentTime - data.timestamp) / 1000; // Convert to seconds
+
+        // Predict where the puck should be based on the velocity and delay
+        const predictedX = data.x + data.velocityX * timeDelta;
+        const predictedY = data.y + data.velocityY * timeDelta;
+
+        // Move the puck smoothly towards the predicted position
+        this.tweens.add({
+          targets: this.puck,
+          x: predictedX,
+          y: predictedY,
+          duration: Math.max(50, timeDelta * 1000), // Smooth transition (50ms min)
+          ease: "Linear",
+        });
+
+        // Also update velocity for smoother prediction
+        this.puck.body.setVelocity(data.velocityX, data.velocityY);
       });
 
       this.socket.on("scoreSync", (scores) => {
@@ -118,8 +137,6 @@ class Example extends Phaser.Scene {
           this.player2ScoreText.setText(this.player2Score.toString());
         }
       });
-
-      
 
       this.socket.on("playerNumber", (num) => {
         this.playerNumber = num;
@@ -656,11 +673,7 @@ class Example extends Phaser.Scene {
 
     // Add bounds collision event
     this.puck.body.onWorldBounds = true;
-
-
     this.physics.world.on("worldbounds", (body, up, down, left, right) => {
-      if (body.gameObject !== this.puck) return;
-
       // Only reset on goals (left/right bounds within goal area)
       if ((left || right) && this.puck.y >= 175 && this.puck.y <= 425) {
         // Check if puck is within goal height bounds
@@ -670,7 +683,7 @@ class Example extends Phaser.Scene {
           // Update score and switch goal appearance
           if (left) {
             // Play sound when hitting the base
-            if(this.audioContext){
+            if (this.audioContext) {
               const source = this.audioContext.createBufferSource();
               source.buffer = this.paddleHitSound;
               source.connect(this.audioContext.destination);
@@ -715,7 +728,7 @@ class Example extends Phaser.Scene {
             });
           } else if (right) {
             // Play sound when hitting the base
-            if(this.audioContext){
+            if (this.audioContext) {
               const source = this.audioContext.createBufferSource();
               source.buffer = this.paddleHitSound;
               source.connect(this.audioContext.destination);
@@ -782,29 +795,12 @@ class Example extends Phaser.Scene {
               player2: this.player2Score,
             });
           }
-
-
         }
 
         // Reset puck to center with no velocity
         this.puck.setPosition(400, 300);
         this.puck.setVelocity(0, 0);
       }
-
-
-      // Handle top/bottom wall bounces
-      else if (up || down) {
-        if (this.socket) {
-          this.socket.emit("puckUpdate", {
-            x: this.puck.x,
-            y: this.puck.y,
-            velocityX: this.puck.body.velocity.x,
-            velocityY: this.puck.body.velocity.y
-          });
-        }
-      }
-
-      
     });
 
     // Make puck interactive
@@ -819,7 +815,7 @@ class Example extends Phaser.Scene {
           startSpeed * Math.cos((startAngle * Math.PI) / 180),
           startSpeed * Math.sin((startAngle * Math.PI) / 180)
         );
-    
+
         // Immediately sync the puck state
         if (this.socket) {
           this.socket.emit("puckUpdate", {
@@ -866,7 +862,6 @@ class Example extends Phaser.Scene {
       if (this.socket) {
         this.socket.emit("playerMove", { x, y });
       }
-      
     });
     this.time.addEvent({
       delay: 3000,
@@ -875,28 +870,30 @@ class Example extends Phaser.Scene {
     });
   }
   update() {
-    this.paddle1.setVelocityY(0);
-    this.paddle2.setVelocityY(0);
-    this.puckText.setPosition(this.puck.x, this.puck.y - 20);
+    let lastUpdate = 0;
+    this.update = function (time) {
+      this.paddle1.setVelocityY(0);
+      this.paddle2.setVelocityY(0);
+      this.puckText.setPosition(this.puck.x, this.puck.y - 20);
 
-    // Handle CANCER text visibility based on switch states
-    if (this.rightSwitchOn) {
-      // When tumor suppressor is ON, hide right cancer text
-      this.cancerTextRight.setAlpha(0);
-    } else {
-      // When tumor suppressor is OFF, show right cancer text
-      this.cancerTextRight.setAlpha(1);
-    }
+      // Send updates every 100ms instead of every frame
+      if (this.socket && this.isPlayerReady && time - lastUpdate > 100) {
+        this.socket.emit("puckUpdate", {
+          x: this.puck.x,
+          y: this.puck.y,
+          velocityX: this.puck.body.velocity.x,
+          velocityY: this.puck.body.velocity.y,
+          timestamp: performance.now(),
+        });
 
-    // Show left cancer text when oncogene is ON
-    this.cancerTextLeft.setAlpha(this.leftSwitchOn ? 1 : 0);
-
+        lastUpdate = time; // Update the last sent time
+      }
+    };
   }
   handlePaddleCollision(puck, paddle) {
     // Play sound effect
     if (puck.active && paddle.active) {
-      
-      if(this.audioContext){
+      if (this.audioContext) {
         const source = this.audioContext.createBufferSource();
         source.buffer = this.paddleHitSound;
         source.connect(this.audioContext.destination);
@@ -959,16 +956,6 @@ class Example extends Phaser.Scene {
       }
       // Set final velocity
       puck.setVelocity(newVelX, newVelY);
-
-      // Sync state after collision
-      if (this.socket) {
-        this.socket.emit("puckUpdate", {
-          x: puck.x,
-          y: puck.y,
-          velocityX: newVelX,
-          velocityY: newVelY
-        });
-      }
     }
   }
 }
