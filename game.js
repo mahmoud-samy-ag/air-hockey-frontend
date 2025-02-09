@@ -56,7 +56,7 @@ class Example extends Phaser.Scene {
       .setVisible(false);
 
     if (typeof io !== "undefined") {
-      this.socket = io("https://air-hockey-backend.onrender.com/");
+      this.socket = io("https://air-hockey-backend.onrender.com");
 
       const urlParams = new URLSearchParams(window.location.search);
       const roomId = urlParams.get("room_id") || `room_${Date.now()}`;
@@ -103,27 +103,27 @@ class Example extends Phaser.Scene {
 
       this.socket.on("puckSync", (data) => {
         if (!this.isPlayerReady) return;
-
-        // Estimate the time delay between receiving the update
-        const currentTime = performance.now();
-        const timeDelta = (currentTime - data.timestamp) / 1000; // Convert to seconds
-
-        // Predict where the puck should be based on the velocity and delay
+    
+        // Estimate network delay
+        const timeDelta = (performance.now() - data.timestamp) / 1000; // Convert ms to sec
+    
+        // Predict where the puck should be
         const predictedX = data.x + data.velocityX * timeDelta;
         const predictedY = data.y + data.velocityY * timeDelta;
-
-        // Move the puck smoothly towards the predicted position
+    
+        // Apply smoothing for smoother interpolation
         this.tweens.add({
-          targets: this.puck,
-          x: predictedX,
-          y: predictedY,
-          duration: Math.max(50, timeDelta * 1000), // Smooth transition (50ms min)
-          ease: "Linear",
+            targets: this.puck,
+            x: predictedX,
+            y: predictedY,
+            duration: Math.max(30, timeDelta * 1000), // 30ms minimum transition
+            ease: "Linear",
         });
-
-        // Also update velocity for smoother prediction
+    
+        // Update velocity for better prediction
         this.puck.body.setVelocity(data.velocityX, data.velocityY);
-      });
+    });
+    
 
       this.socket.on("scoreSync", (scores) => {
         this.player1Score = scores.player1;
@@ -150,6 +150,32 @@ class Example extends Phaser.Scene {
         this.connectionStatus.setVisible(false);
         this.isPlayerReady = true;
       });
+
+      // Ping measurement setup
+      this.pingText = this.add.text(10, 10, "Ping: --ms", {
+        fontSize: "16px",
+        fill: "#ffffff",
+      });
+
+      this.lastPingTime = 0;
+
+      // Send ping request to server
+      this.socket.on("pongResponse", (serverTime) => {
+        const latency = performance.now() - serverTime;
+        this.pingText.setText(`Ping: ${latency.toFixed(1)}ms`);
+
+        console.log(`Ping: ${latency.toFixed(1)}ms`)
+      });
+
+      // Function to regularly send pings
+      this.time.addEvent({
+        delay: 1000, // Check ping every second
+        loop: true,
+        callback: () => {
+            this.socket.emit("pingRequest", performance.now());
+        },
+      });
+
 
       this.socket.on("opponentMove", (data) => {
         if (this.playerNumber === 1) {
@@ -860,7 +886,10 @@ class Example extends Phaser.Scene {
       }
 
       if (this.socket) {
-        this.socket.emit("playerMove", { x, y });
+        if (Phaser.Math.Distance.Between(this.paddle1.x, this.paddle1.y, x, y) > 5) {
+          this.socket.emit("playerMove", { x, y });
+      }
+      
       }
     });
     this.time.addEvent({
