@@ -56,7 +56,7 @@ class Example extends Phaser.Scene {
       .setVisible(false);
 
     if (typeof io !== "undefined") {
-      this.socket = io("https://air-hockey-backend.onrender.com");
+      this.socket = io("https://air-hockey-backend.fly.dev/");
 
       const urlParams = new URLSearchParams(window.location.search);
       const roomId = urlParams.get("room_id") || `room_${Date.now()}`;
